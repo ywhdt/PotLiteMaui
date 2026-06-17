@@ -12,4 +12,5 @@ public interface ITranslationService
 {
 	IReadOnlyList<TranslationProviderDescriptor> Providers { get; }
 	Task<TranslationResult> TranslateAsync(TranslationRequest request, CancellationToken cancellationToken = default);
+	Task<TranslationBatchResult> TranslateManyAsync(TranslationBatchRequest request, CancellationToken cancellationToken = default);
 }

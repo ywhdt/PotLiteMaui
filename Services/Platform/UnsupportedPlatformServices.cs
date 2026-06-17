@@ -71,10 +71,9 @@ public sealed class MauiSecureCredentialStore : ISecureCredentialStore
 	}
 }
 
-public sealed class DefaultPopupPlacementService : IPopupPlacementService
+public sealed class DefaultResultPopupService : IResultPopupService
 {
-	public Point GetPreferredPopupPosition(double width, double height)
+	public void Show(Models.TranslationBatchResult result, int autoHideSeconds)
 	{
-		return new Point(160, 120);
 	}
 }

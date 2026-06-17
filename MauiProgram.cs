@@ -43,21 +43,21 @@ public static class MauiProgram
 		builder.Services.AddSingleton<ITrayService, WindowsTrayService>();
 		builder.Services.AddSingleton<IStartupService, WindowsStartupService>();
 		builder.Services.AddSingleton<ISecureCredentialStore, WindowsSecureCredentialStore>();
-		builder.Services.AddSingleton<IPopupPlacementService, WindowsPopupPlacementService>();
+		builder.Services.AddSingleton<IResultPopupService, WindowsResultPopupService>();
 #elif MACCATALYST
 		builder.Services.AddSingleton<IHotkeyService, MacHotkeyService>();
 		builder.Services.AddSingleton<ITextSelectionService, MacTextSelectionService>();
 		builder.Services.AddSingleton<ITrayService, MacTrayService>();
 		builder.Services.AddSingleton<IStartupService, MacStartupService>();
 		builder.Services.AddSingleton<ISecureCredentialStore, MauiSecureCredentialStore>();
-		builder.Services.AddSingleton<IPopupPlacementService, DefaultPopupPlacementService>();
+		builder.Services.AddSingleton<IResultPopupService, DefaultResultPopupService>();
 #else
 		builder.Services.AddSingleton<IHotkeyService, UnsupportedHotkeyService>();
 		builder.Services.AddSingleton<ITextSelectionService, UnsupportedTextSelectionService>();
 		builder.Services.AddSingleton<ITrayService, UnsupportedTrayService>();
 		builder.Services.AddSingleton<IStartupService, UnsupportedStartupService>();
 		builder.Services.AddSingleton<ISecureCredentialStore, MauiSecureCredentialStore>();
-		builder.Services.AddSingleton<IPopupPlacementService, DefaultPopupPlacementService>();
+		builder.Services.AddSingleton<IResultPopupService, DefaultResultPopupService>();
 #endif
 		builder.Services.AddTransient<MainPage>();
 

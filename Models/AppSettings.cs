@@ -20,6 +20,8 @@ public sealed class AppSettings
 	public string SourceLanguage { get; set; } = "auto";
 	public string TargetLanguage { get; set; } = "zh";
 	public string DefaultProvider { get; set; } = TranslationProviderIds.GoogleWeb;
+	public bool MultiProviderEnabled { get; set; }
+	public List<string> EnabledProviderIds { get; set; } = [TranslationProviderIds.GoogleWeb];
 	public bool RunInTray { get; set; } = true;
 	public bool StartWithSystem { get; set; }
 	public bool HistoryEnabled { get; set; } = true;

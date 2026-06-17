@@ -26,9 +26,9 @@ public sealed class JsonTranslationHistoryStore : ITranslationHistoryStore
 			.ToArray() ?? [];
 	}
 
-	public async Task AddAsync(TranslationResult result, AppSettings settings)
+	public async Task AddAsync(TranslationBatchResult result, AppSettings settings)
 	{
-		if (!settings.HistoryEnabled)
+		if (!settings.HistoryEnabled || !result.HasSuccessfulResults)
 		{
 			return;
 		}

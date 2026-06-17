@@ -37,7 +37,7 @@ public interface ISecureCredentialStore
 	Task DeleteAsync(string key);
 }
 
-public interface IPopupPlacementService
+public interface IResultPopupService
 {
-	Point GetPreferredPopupPosition(double width, double height);
+	void Show(TranslationBatchResult result, int autoHideSeconds);
 }
