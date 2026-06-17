@@ -4,7 +4,12 @@ namespace PotLiteMaui.Services.Platform;
 
 public sealed class UnsupportedHotkeyService : IHotkeyService
 {
-	public event EventHandler? HotkeyPressed;
+	public event EventHandler? HotkeyPressed
+	{
+		add { }
+		remove { }
+	}
+
 	public bool IsRegistered => false;
 	public string HotkeyText { get; private set; } = string.Empty;
 
