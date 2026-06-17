@@ -13,8 +13,8 @@
 
 		<ApplicationTitle>划词翻译</ApplicationTitle>
 		<ApplicationId>dev.codex.potlite</ApplicationId>
-		<ApplicationDisplayVersion>0.1.10-alpha</ApplicationDisplayVersion>
-		<ApplicationVersion>20</ApplicationVersion>
+		<ApplicationDisplayVersion>0.1.12-alpha</ApplicationDisplayVersion>
+		<ApplicationVersion>22</ApplicationVersion>
 		<WindowsPackageType>None</WindowsPackageType>
 		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 		<AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>

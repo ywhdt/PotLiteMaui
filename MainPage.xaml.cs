@@ -223,24 +223,26 @@ public partial class MainPage : ContentPage
 		IResultPopupSession? popupSession = null;
 		try
 		{
-			popupSession = ShowLoadingResultWindow(string.Empty, "正在读取选中文本");
 			SetBusy(true, "正在读取选中文本");
 			var selectedText = await _textSelectionService.CaptureSelectedTextAsync(_settings.CopyDelayMs);
 			SetBusy(false);
 			if (string.IsNullOrWhiteSpace(selectedText))
 			{
 				SetStatus("没有读取到选中文本");
-				UpdateLoadingResultWindow(popupSession, string.Empty, "没有读取到选中文本");
 				return;
 			}
 
 			InputEditor.Text = selectedText.Trim();
+			popupSession = ShowLoadingResultWindow(InputEditor.Text, "正在翻译");
 			await TranslateTextAsync(InputEditor.Text, showWindow: true, popupSession);
 		}
 		catch (Exception ex)
 		{
 			SetStatus(ex.Message);
-			UpdateLoadingResultWindow(popupSession, string.Empty, ex.Message);
+			if (popupSession is not null)
+			{
+				UpdateLoadingResultWindow(popupSession, InputEditor.Text, ex.Message);
+			}
 		}
 		finally
 		{
