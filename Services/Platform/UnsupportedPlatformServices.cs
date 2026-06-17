@@ -4,7 +4,12 @@ namespace PotLiteMaui.Services.Platform;
 
 public sealed class UnsupportedHotkeyService : IHotkeyService
 {
-	public event EventHandler? HotkeyPressed;
+	public event EventHandler? HotkeyPressed
+	{
+		add { }
+		remove { }
+	}
+
 	public bool IsRegistered => false;
 	public string HotkeyText { get; private set; } = string.Empty;
 
@@ -88,6 +93,19 @@ public sealed class LauncherAudioPlaybackService : IAudioPlaybackService
 
 public sealed class DefaultResultPopupService : IResultPopupService
 {
+	public IResultPopupSession? ShowLoading(string sourceText, string message, double resultFontSize)
+	{
+		return null;
+	}
+
+	public void UpdateLoading(IResultPopupSession? session, string sourceText, string message, double resultFontSize)
+	{
+	}
+
+	public void Update(IResultPopupSession? session, Models.TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
+	{
+	}
+
 	public void Show(Models.TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
 	{
 	}

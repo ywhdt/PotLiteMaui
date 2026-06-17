@@ -6,7 +6,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
 
-  <Identity Name="dev.codex.potlite" Publisher="CN=PotLiteMaui" Version="0.1.8.0" />
+  <Identity Name="dev.codex.potlite" Publisher="CN=PotLiteMaui" Version="0.1.10.0" />
 
   <mp:PhoneIdentity PhoneProductId="D928E59A-B943-4E15-B3A9-54E807D752CB" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

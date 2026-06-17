@@ -42,7 +42,14 @@ public interface IAudioPlaybackService
 	Task PlayAsync(string audioUrl, CancellationToken cancellationToken = default);
 }
 
+public interface IResultPopupSession
+{
+}
+
 public interface IResultPopupService
 {
+	IResultPopupSession? ShowLoading(string sourceText, string message, double resultFontSize);
+	void UpdateLoading(IResultPopupSession? session, string sourceText, string message, double resultFontSize);
+	void Update(IResultPopupSession? session, TranslationBatchResult result, int autoHideSeconds, double resultFontSize);
 	void Show(TranslationBatchResult result, int autoHideSeconds, double resultFontSize);
 }

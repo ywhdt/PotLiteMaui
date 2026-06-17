@@ -220,23 +220,27 @@ public partial class MainPage : ContentPage
 			return;
 		}
 
+		IResultPopupSession? popupSession = null;
 		try
 		{
+			popupSession = ShowLoadingResultWindow(string.Empty, "正在读取选中文本");
 			SetBusy(true, "正在读取选中文本");
 			var selectedText = await _textSelectionService.CaptureSelectedTextAsync(_settings.CopyDelayMs);
 			SetBusy(false);
 			if (string.IsNullOrWhiteSpace(selectedText))
 			{
 				SetStatus("没有读取到选中文本");
+				UpdateLoadingResultWindow(popupSession, string.Empty, "没有读取到选中文本");
 				return;
 			}
 
 			InputEditor.Text = selectedText.Trim();
-			await TranslateTextAsync(InputEditor.Text, showWindow: true);
+			await TranslateTextAsync(InputEditor.Text, showWindow: true, popupSession);
 		}
 		catch (Exception ex)
 		{
 			SetStatus(ex.Message);
+			UpdateLoadingResultWindow(popupSession, string.Empty, ex.Message);
 		}
 		finally
 		{
@@ -244,7 +248,7 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	private async Task TranslateTextAsync(string? text, bool showWindow)
+	private async Task TranslateTextAsync(string? text, bool showWindow, IResultPopupSession? popupSession = null)
 	{
 		if (_isBusy && !showWindow)
 		{
@@ -254,20 +258,27 @@ public partial class MainPage : ContentPage
 		if (string.IsNullOrWhiteSpace(text))
 		{
 			SetStatus("请输入原文");
+			UpdateLoadingResultWindow(popupSession, string.Empty, "请输入原文");
 			return;
 		}
 
+		var sourceText = text.Trim();
 		try
 		{
 			if (!showWindow)
 			{
 				SetBusy(true, "正在翻译");
 			}
+			else
+			{
+				popupSession ??= ShowLoadingResultWindow(sourceText, "正在翻译");
+				UpdateLoadingResultWindow(popupSession, sourceText, "正在翻译");
+			}
 
 			CaptureSettingsFromUi();
 			await _settingsStore.SaveAsync(_settings);
 			var result = await _translationService.TranslateManyAsync(new TranslationBatchRequest(
-				text.Trim(),
+				sourceText,
 				_settings.SourceLanguage,
 				_settings.TargetLanguage,
 				GetSelectedProviderIds(),
@@ -280,12 +291,17 @@ public partial class MainPage : ContentPage
 				: $"完成 {result.Results.Count} 个，失败 {result.Failures.Count} 个");
 			if (showWindow)
 			{
-				ShowResultWindow(result);
+				UpdateResultWindow(popupSession, result);
 			}
 		}
 		catch (Exception ex)
 		{
 			SetStatus(ex.Message);
+			if (showWindow)
+			{
+				popupSession ??= ShowLoadingResultWindow(sourceText, "翻译失败");
+				UpdateLoadingResultWindow(popupSession, sourceText, ex.Message);
+			}
 		}
 		finally
 		{
@@ -686,18 +702,166 @@ public partial class MainPage : ContentPage
 
 		AddPronunciationRow(layout, dictionary);
 
-		var body = CreateDictionaryBodyText(dictionary);
-		if (!string.IsNullOrWhiteSpace(body))
+		AddDictionaryTranslations(layout, dictionary, resultFontSize);
+		AddDictionaryExamples(layout, dictionary, resultFontSize);
+		AddDictionarySourceLink(layout, dictionary);
+	}
+
+	private static void AddDictionaryTranslations(
+		VerticalStackLayout layout,
+		DictionaryResult dictionary,
+		double resultFontSize)
+	{
+		var translations = dictionary.Translations
+			.Where(item => !string.IsNullOrWhiteSpace(item.DisplayTarget))
+			.Take(8)
+			.ToList();
+		if (translations.Count == 0)
 		{
-			layout.Children.Add(new Label
+			return;
+		}
+
+		layout.Children.Add(CreateDictionarySectionTitle("释义", resultFontSize));
+		foreach (var group in translations.GroupBy(item => item.DisplayPartOfSpeech))
+		{
+			layout.Children.Add(CreateTranslationGroup(group.Key, group.ToList(), resultFontSize));
+		}
+	}
+
+	private static View CreateTranslationGroup(
+		string partOfSpeech,
+		IReadOnlyList<DictionaryTranslation> translations,
+		double resultFontSize)
+	{
+		var grid = new Grid
+		{
+			ColumnDefinitions =
 			{
-				Text = body,
+				new ColumnDefinition { Width = GridLength.Auto },
+				new ColumnDefinition { Width = GridLength.Star }
+			},
+			ColumnSpacing = 10,
+			Margin = new Thickness(0, 2, 0, 4)
+		};
+
+		var badge = CreatePartOfSpeechBadge(partOfSpeech, resultFontSize);
+		Grid.SetColumn(badge, 0);
+		grid.Children.Add(badge);
+
+		var definitions = new VerticalStackLayout { Spacing = 5 };
+		foreach (var translation in translations)
+		{
+			definitions.Children.Add(new Label
+			{
+				Text = translation.DisplayTarget,
 				FontSize = resultFontSize,
 				LineBreakMode = LineBreakMode.WordWrap
 			});
+
+			if (translation.BackTranslations.Count > 0)
+			{
+				definitions.Children.Add(new Label
+				{
+					Text = $"相关：{string.Join(", ", translation.BackTranslations.Take(5))}",
+					FontSize = Math.Max(12, resultFontSize - 2),
+					TextColor = Colors.SlateGray,
+					LineBreakMode = LineBreakMode.WordWrap
+				});
+			}
 		}
 
-		AddDictionarySourceLink(layout, dictionary);
+		Grid.SetColumn(definitions, 1);
+		grid.Children.Add(definitions);
+		return grid;
+	}
+
+	private static void AddDictionaryExamples(
+		VerticalStackLayout layout,
+		DictionaryResult dictionary,
+		double resultFontSize)
+	{
+		var examples = dictionary.Examples
+			.Where(item => !string.IsNullOrWhiteSpace(item.Source) && !string.IsNullOrWhiteSpace(item.Target))
+			.Take(4)
+			.ToList();
+		if (examples.Count == 0)
+		{
+			return;
+		}
+
+		layout.Children.Add(CreateDictionarySectionTitle("例句", resultFontSize));
+		foreach (var example in examples)
+		{
+			layout.Children.Add(CreateExampleBlock(example, resultFontSize));
+		}
+	}
+
+	private static View CreateExampleBlock(DictionaryExample example, double resultFontSize)
+	{
+		var grid = new Grid
+		{
+			ColumnDefinitions =
+			{
+				new ColumnDefinition { Width = 3 },
+				new ColumnDefinition { Width = GridLength.Star }
+			},
+			ColumnSpacing = 9,
+			Margin = new Thickness(0, 2, 0, 6)
+		};
+		grid.Children.Add(new BoxView
+		{
+			Color = Colors.Teal,
+			WidthRequest = 3,
+			VerticalOptions = LayoutOptions.Fill
+		});
+
+		var text = new VerticalStackLayout { Spacing = 3 };
+		text.Children.Add(new Label
+		{
+			Text = example.Source,
+			FontSize = Math.Max(12, resultFontSize - 1),
+			LineBreakMode = LineBreakMode.WordWrap
+		});
+		text.Children.Add(new Label
+		{
+			Text = example.Target,
+			FontSize = Math.Max(12, resultFontSize - 2),
+			TextColor = Colors.SlateGray,
+			LineBreakMode = LineBreakMode.WordWrap
+		});
+		Grid.SetColumn(text, 1);
+		grid.Children.Add(text);
+		return grid;
+	}
+
+	private static Label CreateDictionarySectionTitle(string text, double resultFontSize)
+	{
+		return new Label
+		{
+			Text = text,
+			FontSize = Math.Max(12, resultFontSize - 1),
+			FontAttributes = FontAttributes.Bold,
+			TextColor = Colors.Teal,
+			Margin = new Thickness(0, 6, 0, 0)
+		};
+	}
+
+	private static Border CreatePartOfSpeechBadge(string text, double resultFontSize)
+	{
+		return new Border
+		{
+			BackgroundColor = Color.FromArgb("#E0F2FE"),
+			Stroke = Color.FromArgb("#BAE6FD"),
+			StrokeShape = new RoundRectangle { CornerRadius = 6 },
+			Padding = new Thickness(8, 3),
+			Content = new Label
+			{
+				Text = text,
+				FontSize = Math.Max(12, resultFontSize - 3),
+				FontAttributes = FontAttributes.Bold,
+				TextColor = Colors.DarkCyan
+			}
+		};
 	}
 
 	private void AddPronunciationRow(VerticalStackLayout layout, DictionaryResult dictionary)
@@ -770,33 +934,6 @@ public partial class MainPage : ContentPage
 		layout.Children.Add(link);
 	}
 
-	private static string CreateDictionaryBodyText(DictionaryResult dictionary)
-	{
-		var lines = new List<string>();
-		foreach (var translation in dictionary.Translations.Take(8))
-		{
-			var pos = string.IsNullOrWhiteSpace(translation.PartOfSpeech) ? string.Empty : $" [{translation.PartOfSpeech}]";
-			lines.Add($"{translation.DisplayTarget}{pos}");
-			if (translation.BackTranslations.Count > 0)
-			{
-				lines.Add($"  {string.Join(", ", translation.BackTranslations.Take(5))}");
-			}
-		}
-
-		if (dictionary.Examples.Count > 0)
-		{
-			lines.Add(string.Empty);
-			lines.Add("例句");
-			foreach (var example in dictionary.Examples.Take(3))
-			{
-				lines.Add($"- {example.Source}");
-				lines.Add($"  {example.Target}");
-			}
-		}
-
-		return string.Join(Environment.NewLine, lines);
-	}
-
 	private async Task OpenDictionaryPageAsync(string url)
 	{
 		try
@@ -827,6 +964,27 @@ public partial class MainPage : ContentPage
 	private void ShowResultWindow(TranslationBatchResult result)
 	{
 		_resultPopupService.Show(result, 0, GetResultFontSize());
+	}
+
+	private IResultPopupSession? ShowLoadingResultWindow(string sourceText, string message)
+	{
+		return _resultPopupService.ShowLoading(sourceText, message, GetResultFontSize());
+	}
+
+	private void UpdateLoadingResultWindow(IResultPopupSession? session, string sourceText, string message)
+	{
+		_resultPopupService.UpdateLoading(session, sourceText, message, GetResultFontSize());
+	}
+
+	private void UpdateResultWindow(IResultPopupSession? session, TranslationBatchResult result)
+	{
+		if (session is null)
+		{
+			ShowResultWindow(result);
+			return;
+		}
+
+		_resultPopupService.Update(session, result, 0, GetResultFontSize());
 	}
 
 	private void SetBusy(bool isBusy, string? message = null)

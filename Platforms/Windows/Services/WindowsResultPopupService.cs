@@ -10,6 +10,7 @@ using PotLiteMaui.Services.Platform;
 using WinRT.Interop;
 using WinUIBorder = Microsoft.UI.Xaml.Controls.Border;
 using WinUIButton = Microsoft.UI.Xaml.Controls.Button;
+using WinUIColumnDefinition = Microsoft.UI.Xaml.Controls.ColumnDefinition;
 using WinUIColors = Microsoft.UI.Colors;
 using WinUICornerRadius = Microsoft.UI.Xaml.CornerRadius;
 using WinUIGrid = Microsoft.UI.Xaml.Controls.Grid;
@@ -65,13 +66,101 @@ public sealed class WindowsResultPopupService : IResultPopupService
 			ClampResultFontSize(resultFontSize)));
 	}
 
+	public IResultPopupSession? ShowLoading(string sourceText, string message, double resultFontSize)
+	{
+		if (!MainThread.IsMainThread)
+		{
+			MainThread.BeginInvokeOnMainThread(() => ShowLoadingCore(sourceText, message, ClampResultFontSize(resultFontSize)));
+			return null;
+		}
+
+		return ShowLoadingCore(sourceText, message, ClampResultFontSize(resultFontSize));
+	}
+
+	public void UpdateLoading(IResultPopupSession? session, string sourceText, string message, double resultFontSize)
+	{
+		if (session is not PopupSession popupSession)
+		{
+			return;
+		}
+
+		MainThread.BeginInvokeOnMainThread(() =>
+		{
+			if (_sessions.Contains(popupSession))
+			{
+				popupSession.Window.Content = CreateLoadingContent(
+					sourceText,
+					message,
+					popupSession.State,
+					() => popupSession.Window.Close(),
+					ClampResultFontSize(resultFontSize));
+			}
+		});
+	}
+
+	public void Update(IResultPopupSession? session, TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
+	{
+		if (session is not PopupSession popupSession)
+		{
+			Show(result, autoHideSeconds, resultFontSize);
+			return;
+		}
+
+		MainThread.BeginInvokeOnMainThread(() =>
+		{
+			if (!_sessions.Contains(popupSession))
+			{
+				return;
+			}
+
+			popupSession.Window.Content = CreateContent(
+				result,
+				popupSession.State,
+				() => popupSession.Window.Close(),
+				_audioPlaybackService,
+				ClampResultFontSize(resultFontSize));
+
+			var clampedAutoHide = Math.Clamp(autoHideSeconds, 0, 60);
+			if (clampedAutoHide > 0)
+			{
+				_ = AutoCloseAsync(popupSession, clampedAutoHide);
+			}
+		});
+	}
+
 	private void ShowCore(TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
 	{
 		CloseUnpinnedSessions();
 
+		var session = CreateSession();
+		session.Window.Content = CreateContent(result, session.State, () => session.Window.Close(), _audioPlaybackService, resultFontSize);
+		ShowSession(session);
+
+		if (autoHideSeconds > 0)
+		{
+			_ = AutoCloseAsync(session, autoHideSeconds);
+		}
+	}
+
+	private PopupSession ShowLoadingCore(string sourceText, string message, double resultFontSize)
+	{
+		CloseUnpinnedSessions();
+
+		var session = CreateSession();
+		session.Window.Content = CreateLoadingContent(
+			sourceText,
+			message,
+			session.State,
+			() => session.Window.Close(),
+			resultFontSize);
+		ShowSession(session);
+		return session;
+	}
+
+	private PopupSession CreateSession()
+	{
 		var state = new PopupState();
 		var session = new PopupSession(new WinUIWindow { Title = "翻译结果" }, state);
-		session.Window.Content = CreateContent(result, state, () => session.Window.Close(), _audioPlaybackService, resultFontSize);
 		session.Window.Closed += (_, _) =>
 		{
 			SaveWindowSize(session.Window);
@@ -87,16 +176,15 @@ public sealed class WindowsResultPopupService : IResultPopupService
 			}
 		};
 		_sessions.Add(session);
+		return session;
+	}
 
+	private void ShowSession(PopupSession session)
+	{
 		PrepareWindowBeforeShow(session.Window);
 		session.Window.Activate();
 		PromoteWindow(session.Window);
 		EnableCloseOnDeactivate(session);
-
-		if (autoHideSeconds > 0)
-		{
-			_ = AutoCloseAsync(session, autoHideSeconds);
-		}
 	}
 
 	private static WinUIGrid CreateContent(
@@ -155,15 +243,78 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		WinUIGrid.SetRow(scroll, 1);
 		root.Children.Add(scroll);
 
+		var buttons = CreateFooterButtons(state, close, result.DisplayText);
+		WinUIGrid.SetRow(buttons, 2);
+		root.Children.Add(buttons);
+
+		return root;
+	}
+
+	private static WinUIGrid CreateLoadingContent(
+		string sourceText,
+		string message,
+		PopupState state,
+		Action close,
+		double resultFontSize)
+	{
+		var root = new WinUIGrid
+		{
+			Padding = new WinUIThickness(18),
+			Background = new WinUISolidColorBrush(WinUIColors.FloralWhite),
+			RowDefinitions =
+			{
+				new WinUIRowDefinition { Height = WinUIGridLength.Auto },
+				new WinUIRowDefinition { Height = new WinUIGridLength(1, WinUIGridUnitType.Star) },
+				new WinUIRowDefinition { Height = WinUIGridLength.Auto }
+			}
+		};
+
+		var header = new WinUIBorder
+		{
+			Background = new WinUISolidColorBrush(WinUIColors.White),
+			BorderBrush = new WinUISolidColorBrush(WinUIColors.Gainsboro),
+			BorderThickness = new WinUIThickness(1),
+			CornerRadius = new WinUICornerRadius(12),
+			Padding = new WinUIThickness(12),
+			Child = CreateHeader("翻译中", sourceText, DateTimeOffset.Now)
+		};
+		WinUIGrid.SetRow(header, 0);
+		root.Children.Add(header);
+
+		var stack = new WinUIStackPanel { Spacing = 10 };
+		stack.Children.Add(CreateResultSection("状态", message, isError: false, resultFontSize));
+		var scroll = new WinUIScrollViewer
+		{
+			Content = stack,
+			Margin = new WinUIThickness(0, 12, 0, 12),
+			VerticalScrollBarVisibility = WinUIScrollBarVisibility.Auto
+		};
+		WinUIGrid.SetRow(scroll, 1);
+		root.Children.Add(scroll);
+
+		var buttons = CreateFooterButtons(state, close, copyText: null);
+		WinUIGrid.SetRow(buttons, 2);
+		root.Children.Add(buttons);
+		return root;
+	}
+
+	private static WinUIStackPanel CreateFooterButtons(PopupState state, Action close, string? copyText)
+	{
 		var buttons = new WinUIStackPanel
 		{
 			Orientation = WinUIOrientation.Horizontal,
 			HorizontalAlignment = WinUIHorizontalAlignment.Right,
 			Spacing = 8
 		};
-		var copyButton = CreateActionButton("复制");
-		copyButton.Click += async (_, _) => await Clipboard.Default.SetTextAsync(result.DisplayText);
-		var pinButton = CreateActionButton("固定");
+
+		if (!string.IsNullOrWhiteSpace(copyText))
+		{
+			var copyButton = CreateActionButton("复制");
+			copyButton.Click += async (_, _) => await Clipboard.Default.SetTextAsync(copyText);
+			buttons.Children.Add(copyButton);
+		}
+
+		var pinButton = CreateActionButton(state.IsPinned ? "取消固定" : "固定");
 		pinButton.Click += (_, _) =>
 		{
 			state.IsPinned = !state.IsPinned;
@@ -171,27 +322,28 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		};
 		var closeButton = CreateActionButton("关闭");
 		closeButton.Click += (_, _) => close();
-		buttons.Children.Add(copyButton);
 		buttons.Children.Add(pinButton);
 		buttons.Children.Add(closeButton);
-		WinUIGrid.SetRow(buttons, 2);
-		root.Children.Add(buttons);
-
-		return root;
+		return buttons;
 	}
 
 	private static WinUIStackPanel CreateHeader(TranslationBatchResult result)
 	{
+		return CreateHeader(result.ProviderName, result.SourceText, result.CreatedAt);
+	}
+
+	private static WinUIStackPanel CreateHeader(string title, string sourceText, DateTimeOffset createdAt)
+	{
 		var header = new WinUIStackPanel { Spacing = 5 };
 		header.Children.Add(new WinUITextBlock
 		{
-			Text = $"{result.ProviderName}  {result.CreatedAt:HH:mm:ss}",
+			Text = $"{title}  {createdAt:HH:mm:ss}",
 			FontSize = 13,
 			Foreground = new WinUISolidColorBrush(WinUIColors.Teal)
 		});
 		header.Children.Add(new WinUITextBlock
 		{
-			Text = result.SourceText,
+			Text = string.IsNullOrWhiteSpace(sourceText) ? "正在读取选中文本" : sourceText,
 			FontSize = 15,
 			MaxLines = 2,
 			TextTrimming = TextTrimming.CharacterEllipsis,
@@ -294,18 +446,163 @@ public sealed class WindowsResultPopupService : IResultPopupService
 
 		AddPronunciationRows(panel, dictionary, audioPlaybackService, resultFontSize);
 
-		var body = CreateDictionaryBodyText(dictionary);
-		if (!string.IsNullOrWhiteSpace(body))
+		AddDictionaryTranslations(panel, dictionary, resultFontSize);
+		AddDictionaryExamples(panel, dictionary, resultFontSize);
+		AddDictionarySourceLink(panel, dictionary, resultFontSize);
+	}
+
+	private static void AddDictionaryTranslations(
+		WinUIStackPanel panel,
+		DictionaryResult dictionary,
+		double resultFontSize)
+	{
+		var translations = dictionary.Translations
+			.Where(item => !string.IsNullOrWhiteSpace(item.DisplayTarget))
+			.Take(8)
+			.ToList();
+		if (translations.Count == 0)
 		{
-			panel.Children.Add(new WinUITextBlock
+			return;
+		}
+
+		panel.Children.Add(CreateDictionarySectionTitle("释义", resultFontSize));
+		foreach (var group in translations.GroupBy(item => item.DisplayPartOfSpeech))
+		{
+			panel.Children.Add(CreateTranslationGroup(group.Key, group.ToList(), resultFontSize));
+		}
+	}
+
+	private static WinUIGrid CreateTranslationGroup(
+		string partOfSpeech,
+		IReadOnlyList<DictionaryTranslation> translations,
+		double resultFontSize)
+	{
+		var grid = new WinUIGrid
+		{
+			ColumnSpacing = 10,
+			Margin = new WinUIThickness(0, 2, 0, 4)
+		};
+		grid.ColumnDefinitions.Add(new WinUIColumnDefinition { Width = WinUIGridLength.Auto });
+		grid.ColumnDefinitions.Add(new WinUIColumnDefinition { Width = new WinUIGridLength(1, WinUIGridUnitType.Star) });
+
+		var badge = CreatePartOfSpeechBadge(partOfSpeech, resultFontSize);
+		WinUIGrid.SetColumn(badge, 0);
+		grid.Children.Add(badge);
+
+		var definitions = new WinUIStackPanel { Spacing = 5 };
+		foreach (var translation in translations)
+		{
+			definitions.Children.Add(new WinUITextBlock
 			{
-				Text = body,
+				Text = translation.DisplayTarget,
 				FontSize = resultFontSize,
 				TextWrapping = TextWrapping.Wrap
 			});
+
+			if (translation.BackTranslations.Count > 0)
+			{
+				definitions.Children.Add(new WinUITextBlock
+				{
+					Text = $"相关：{string.Join(", ", translation.BackTranslations.Take(5))}",
+					FontSize = Math.Max(12, resultFontSize - 2),
+					Foreground = new WinUISolidColorBrush(WinUIColors.DimGray),
+					TextWrapping = TextWrapping.Wrap
+				});
+			}
 		}
 
-		AddDictionarySourceLink(panel, dictionary, resultFontSize);
+		WinUIGrid.SetColumn(definitions, 1);
+		grid.Children.Add(definitions);
+		return grid;
+	}
+
+	private static void AddDictionaryExamples(
+		WinUIStackPanel panel,
+		DictionaryResult dictionary,
+		double resultFontSize)
+	{
+		var examples = dictionary.Examples
+			.Where(item => !string.IsNullOrWhiteSpace(item.Source) && !string.IsNullOrWhiteSpace(item.Target))
+			.Take(4)
+			.ToList();
+		if (examples.Count == 0)
+		{
+			return;
+		}
+
+		panel.Children.Add(CreateDictionarySectionTitle("例句", resultFontSize));
+		foreach (var example in examples)
+		{
+			panel.Children.Add(CreateExampleBlock(example, resultFontSize));
+		}
+	}
+
+	private static WinUIGrid CreateExampleBlock(DictionaryExample example, double resultFontSize)
+	{
+		var grid = new WinUIGrid
+		{
+			ColumnSpacing = 9,
+			Margin = new WinUIThickness(0, 2, 0, 6)
+		};
+		grid.ColumnDefinitions.Add(new WinUIColumnDefinition { Width = new WinUIGridLength(3) });
+		grid.ColumnDefinitions.Add(new WinUIColumnDefinition { Width = new WinUIGridLength(1, WinUIGridUnitType.Star) });
+
+		grid.Children.Add(new WinUIBorder
+		{
+			Width = 3,
+			Background = new WinUISolidColorBrush(WinUIColors.Teal),
+			CornerRadius = new WinUICornerRadius(2),
+			VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch
+		});
+
+		var text = new WinUIStackPanel { Spacing = 3 };
+		text.Children.Add(new WinUITextBlock
+		{
+			Text = example.Source,
+			FontSize = Math.Max(12, resultFontSize - 1),
+			TextWrapping = TextWrapping.Wrap
+		});
+		text.Children.Add(new WinUITextBlock
+		{
+			Text = example.Target,
+			FontSize = Math.Max(12, resultFontSize - 2),
+			Foreground = new WinUISolidColorBrush(WinUIColors.DimGray),
+			TextWrapping = TextWrapping.Wrap
+		});
+		WinUIGrid.SetColumn(text, 1);
+		grid.Children.Add(text);
+		return grid;
+	}
+
+	private static WinUITextBlock CreateDictionarySectionTitle(string text, double resultFontSize)
+	{
+		return new WinUITextBlock
+		{
+			Text = text,
+			FontSize = Math.Max(12, resultFontSize - 1),
+			FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+			Foreground = new WinUISolidColorBrush(WinUIColors.Teal),
+			Margin = new WinUIThickness(0, 6, 0, 0)
+		};
+	}
+
+	private static WinUIBorder CreatePartOfSpeechBadge(string text, double resultFontSize)
+	{
+		return new WinUIBorder
+		{
+			Background = new WinUISolidColorBrush(WinUIColors.LightCyan),
+			BorderBrush = new WinUISolidColorBrush(WinUIColors.PowderBlue),
+			BorderThickness = new WinUIThickness(1),
+			CornerRadius = new WinUICornerRadius(6),
+			Padding = new WinUIThickness(8, 3, 8, 3),
+			Child = new WinUITextBlock
+			{
+				Text = text,
+				FontSize = Math.Max(12, resultFontSize - 3),
+				FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+				Foreground = new WinUISolidColorBrush(WinUIColors.DarkCyan)
+			}
+		};
 	}
 
 	private static void AddPronunciationRows(
@@ -376,33 +673,6 @@ public sealed class WindowsResultPopupService : IResultPopupService
 			}
 		};
 		panel.Children.Add(link);
-	}
-
-	private static string CreateDictionaryBodyText(DictionaryResult dictionary)
-	{
-		var lines = new List<string>();
-		foreach (var translation in dictionary.Translations.Take(8))
-		{
-			var pos = string.IsNullOrWhiteSpace(translation.PartOfSpeech) ? string.Empty : $" [{translation.PartOfSpeech}]";
-			lines.Add($"{translation.DisplayTarget}{pos}");
-			if (translation.BackTranslations.Count > 0)
-			{
-				lines.Add($"  {string.Join(", ", translation.BackTranslations.Take(5))}");
-			}
-		}
-
-		if (dictionary.Examples.Count > 0)
-		{
-			lines.Add(string.Empty);
-			lines.Add("例句");
-			foreach (var example in dictionary.Examples.Take(3))
-			{
-				lines.Add($"- {example.Source}");
-				lines.Add($"  {example.Target}");
-			}
-		}
-
-		return string.Join(Environment.NewLine, lines);
 	}
 
 	private void CloseUnpinnedSessions()
@@ -535,7 +805,7 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		return new PointNative { X = x, Y = y };
 	}
 
-	private sealed record PopupSession(WinUIWindow Window, PopupState State);
+	private sealed record PopupSession(WinUIWindow Window, PopupState State) : IResultPopupSession;
 
 	private sealed class PopupState
 	{
