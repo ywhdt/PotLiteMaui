@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PotLiteMaui.TranslationResultPage"
+             Padding="18"
+             Title="翻译结果">
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+        <VerticalStackLayout Spacing="4">
+            <Label x:Name="ProviderLabel"
+                   FontSize="13"
+                   TextColor="{AppThemeBinding Light=#64748B, Dark=#CBD5E1}" />
+            <Label x:Name="SourceLabel"
+                   FontSize="14"
+                   LineBreakMode="TailTruncation"
+                   TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
+        </VerticalStackLayout>
+
+        <ScrollView Grid.Row="1">
+            <Label x:Name="ResultLabel"
+                   FontSize="18"
+                   LineBreakMode="WordWrap"
+                   TextColor="{AppThemeBinding Light=#0F172A, Dark=#F8FAFC}" />
+        </ScrollView>
+
+        <HorizontalStackLayout Grid.Row="2"
+                               Spacing="10"
+                               HorizontalOptions="End">
+            <Button Text="复制"
+                    Clicked="OnCopyClicked" />
+            <Button x:Name="PinButton"
+                    Text="固定"
+                    Clicked="OnPinClicked" />
+            <Button Text="关闭"
+                    Clicked="OnCloseClicked" />
+        </HorizontalStackLayout>
+    </Grid>
+</ContentPage>

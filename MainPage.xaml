@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PotLiteMaui.MainPage"
+             Title="划词翻译">
+    <ScrollView>
+        <VerticalStackLayout Padding="28" Spacing="18">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <VerticalStackLayout Grid.Column="0" Spacing="4">
+                    <Label Text="划词翻译"
+                           FontSize="30"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=#0F172A, Dark=#F8FAFC}" />
+                    <Label x:Name="StatusLabel"
+                           Text="准备就绪"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
+                </VerticalStackLayout>
+
+                <HorizontalStackLayout Grid.Column="1"
+                                       Spacing="10"
+                                       VerticalOptions="Center">
+                    <Label Text="监听"
+                           VerticalOptions="Center" />
+                    <Switch x:Name="GlobalHotkeySwitch"
+                            Toggled="OnSettingsChanged" />
+                </HorizontalStackLayout>
+            </Grid>
+
+            <Border Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                    BackgroundColor="{AppThemeBinding Light=#F8FAFC, Dark=#111827}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="18">
+                <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,Auto" ColumnSpacing="12" RowSpacing="12">
+                    <VerticalStackLayout Grid.Column="0" Spacing="6">
+                        <Label Text="快捷键"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Entry x:Name="HotkeyEntry"
+                               TextChanged="OnSettingsChanged"
+                               Placeholder="Ctrl+Alt+T" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                        <Label Text="状态"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Label x:Name="HotkeyStateLabel"
+                               Text="未注册"
+                               VerticalOptions="Center"
+                               TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="2"
+                            x:Name="CaptureButton"
+                            Text="捕获并翻译"
+                            Clicked="OnCaptureSelectionClicked"
+                            VerticalOptions="End" />
+
+                    <Grid Grid.Row="1" Grid.ColumnSpan="3" ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="10">
+                        <Label Text="托盘常驻" VerticalOptions="Center" />
+                        <Switch Grid.Column="1"
+                                x:Name="RunInTraySwitch"
+                                HorizontalOptions="Start"
+                                Toggled="OnSettingsChanged" />
+                        <Label Grid.Column="2" Text="开机启动" VerticalOptions="Center" />
+                        <Switch Grid.Column="3"
+                                x:Name="StartWithSystemSwitch"
+                                HorizontalOptions="Start"
+                                Toggled="OnSettingsChanged" />
+                        <ActivityIndicator Grid.Column="4"
+                                           x:Name="BusyIndicator"
+                                           IsVisible="False"
+                                           IsRunning="False" />
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
+                <Border Grid.Column="0"
+                        Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="18">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="语言"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                            <VerticalStackLayout Grid.Column="0" Spacing="6">
+                                <Label Text="源语言" />
+                                <Picker x:Name="SourceLanguagePicker"
+                                        SelectedIndexChanged="OnSettingsChanged" />
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Grid.Column="1" Spacing="6">
+                                <Label Text="目标语言" />
+                                <Picker x:Name="TargetLanguagePicker"
+                                        SelectedIndexChanged="OnSettingsChanged" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="18">
+                    <VerticalStackLayout Spacing="12">
+                        <Label Text="翻译引擎"
+                               FontSize="18"
+                               FontAttributes="Bold" />
+                        <Picker x:Name="ProviderPicker"
+                                SelectedIndexChanged="OnSettingsChanged" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Border x:Name="GoogleSection"
+                    Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="18">
+                <Label Text="Google 网页翻译不需要 API Key；该接口为实验性，失败时可切换到 OpenAI。"
+                       TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
+            </Border>
+
+            <Border x:Name="AzureSection"
+                    Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="18">
+                <Grid ColumnDefinitions="2*,*,*" ColumnSpacing="12">
+                    <VerticalStackLayout Grid.Column="0" Spacing="6">
+                        <Label Text="Azure Endpoint" />
+                        <Entry x:Name="AzureEndpointEntry"
+                               TextChanged="OnSettingsChanged"
+                               Placeholder="https://api.cognitive.microsofttranslator.com" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1" Spacing="6">
+                        <Label Text="Region" />
+                        <Entry x:Name="AzureRegionEntry"
+                               TextChanged="OnSettingsChanged" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="2" Spacing="6">
+                        <Label Text="Key" />
+                        <Entry x:Name="AzureKeyEntry"
+                               IsPassword="True"
+                               TextChanged="OnCredentialChanged" />
+                    </VerticalStackLayout>
+                </Grid>
+            </Border>
+
+            <Border x:Name="OpenAISection"
+                    Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="18">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,2*" ColumnSpacing="12">
+                        <VerticalStackLayout Grid.Column="0" Spacing="6">
+                            <Label Text="模型" />
+                            <Entry x:Name="OpenAIModelEntry"
+                                   TextChanged="OnSettingsChanged"
+                                   Placeholder="gpt-4o-mini" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="6">
+                            <Label Text="OpenAI API Key" />
+                            <Entry x:Name="OpenAIKeyEntry"
+                                   IsPassword="True"
+                                   TextChanged="OnCredentialChanged" />
+                        </VerticalStackLayout>
+                    </Grid>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="自定义 Prompt" />
+                        <Editor x:Name="OpenAICustomPromptEditor"
+                                HeightRequest="120"
+                                AutoSize="Disabled"
+                                TextChanged="OnSettingsChanged"
+                                Placeholder="留空时使用上方语言设置；填写后只按这里的指令处理原文，例如：请把输入翻译成自然的日语，只返回译文。" />
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
+                <Border Grid.Column="0"
+                        Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="18">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <Label Text="原文"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   VerticalOptions="Center" />
+                            <Button Grid.Column="1"
+                                    Text="测试翻译"
+                                    Clicked="OnManualTranslateClicked" />
+                        </Grid>
+                        <Editor x:Name="InputEditor"
+                                HeightRequest="180"
+                                AutoSize="Disabled"
+                                Placeholder="输入或捕获到的文本" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                        BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                        StrokeShape="RoundRectangle 8"
+                        Padding="18">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <Label Text="结果"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   VerticalOptions="Center" />
+                            <Button Grid.Column="1"
+                                    Text="复制"
+                                    Clicked="OnCopyResultClicked" />
+                        </Grid>
+                        <Editor x:Name="ResultEditor"
+                                HeightRequest="180"
+                                AutoSize="Disabled"
+                                IsReadOnly="True" />
+                    </VerticalStackLayout>
+                </Border>
+            </Grid>
+
+            <Border Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
+                    BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="18">
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="Auto,*,Auto,120,Auto,Auto" ColumnSpacing="10">
+                        <Label Text="历史记录"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               VerticalOptions="Center" />
+                        <Switch Grid.Column="1"
+                                x:Name="HistoryEnabledSwitch"
+                                HorizontalOptions="Start"
+                                Toggled="OnSettingsChanged" />
+                        <Label Grid.Column="2"
+                               Text="保留条数"
+                               VerticalOptions="Center" />
+                        <Entry Grid.Column="3"
+                               x:Name="HistoryLimitEntry"
+                               Keyboard="Numeric"
+                               TextChanged="OnSettingsChanged" />
+                        <Button Grid.Column="4"
+                                Text="删除"
+                                Clicked="OnDeleteHistoryClicked" />
+                        <Button Grid.Column="5"
+                                Text="清空"
+                                Clicked="OnClearHistoryClicked" />
+                    </Grid>
+                    <Picker x:Name="HistoryPicker"
+                            SelectedIndexChanged="OnHistorySelected" />
+                </VerticalStackLayout>
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
