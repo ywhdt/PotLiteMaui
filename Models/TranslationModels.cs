@@ -184,6 +184,28 @@ public sealed class DictionaryPronunciation
 	public string Label { get; init; } = string.Empty;
 	public string Phonetic { get; init; } = string.Empty;
 	public string AudioUrl { get; init; } = string.Empty;
+
+	public string DisplayLabel
+	{
+		get
+		{
+			if (Label.Contains("美", StringComparison.OrdinalIgnoreCase) ||
+				Label.Contains("us", StringComparison.OrdinalIgnoreCase) ||
+				Label.Contains("american", StringComparison.OrdinalIgnoreCase))
+			{
+				return "美音";
+			}
+
+			if (Label.Contains("英", StringComparison.OrdinalIgnoreCase) ||
+				Label.Contains("uk", StringComparison.OrdinalIgnoreCase) ||
+				Label.Contains("british", StringComparison.OrdinalIgnoreCase))
+			{
+				return "英音";
+			}
+
+			return string.IsNullOrWhiteSpace(Label) ? "播放" : Label;
+		}
+	}
 }
 
 public sealed class DictionaryTranslation

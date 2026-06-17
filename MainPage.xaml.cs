@@ -712,7 +712,7 @@ public partial class MainPage : ContentPage
 		{
 			var button = new Button
 			{
-				Text = "播放",
+				Text = pronunciation.DisplayLabel,
 				FontSize = Math.Max(12, resultFontSize - 3),
 				Padding = new Thickness(10, 4)
 			};

@@ -331,7 +331,7 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		{
 			foreach (var pronunciation in dictionary.Pronunciations.Where(item => !string.IsNullOrWhiteSpace(item.AudioUrl)))
 			{
-				var button = CreateActionButton("播放");
+				var button = CreateActionButton(pronunciation.DisplayLabel);
 				button.FontSize = Math.Max(12, resultFontSize - 3);
 				button.Click += async (_, _) => await audioPlaybackService.PlayAsync(pronunciation.AudioUrl);
 				row.Children.Add(button);
