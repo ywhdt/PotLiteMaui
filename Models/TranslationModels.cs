@@ -214,6 +214,10 @@ public sealed class DictionaryTranslation
 	public string PartOfSpeech { get; init; } = string.Empty;
 	public double Confidence { get; init; }
 	public List<string> BackTranslations { get; init; } = [];
+
+	public string DisplayPartOfSpeech => string.IsNullOrWhiteSpace(PartOfSpeech)
+		? "释义"
+		: PartOfSpeech.Trim();
 }
 
 public sealed class DictionaryExample
