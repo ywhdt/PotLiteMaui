@@ -26,7 +26,7 @@ public sealed class AppSettings
 	public bool StartWithSystem { get; set; }
 	public bool HistoryEnabled { get; set; } = true;
 	public int HistoryLimit { get; set; }
-	public int PopupAutoHideSeconds { get; set; } = 12;
+	public int PopupAutoHideSeconds { get; set; }
 	public int ResultFontSize { get; set; } = 15;
 	public string OpenAIModel { get; set; } = "gpt-4o-mini";
 	public string OpenAICustomPrompt { get; set; } = string.Empty;

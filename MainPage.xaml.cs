@@ -826,7 +826,7 @@ public partial class MainPage : ContentPage
 
 	private void ShowResultWindow(TranslationBatchResult result)
 	{
-		_resultPopupService.Show(result, _settings.PopupAutoHideSeconds, GetResultFontSize());
+		_resultPopupService.Show(result, 0, GetResultFontSize());
 	}
 
 	private void SetBusy(bool isBusy, string? message = null)
