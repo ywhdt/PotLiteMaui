@@ -1,3 +1,5 @@
+using Microsoft.Maui.ApplicationModel;
+
 namespace PotLiteMaui.Services.Platform;
 
 public sealed class UnsupportedHotkeyService : IHotkeyService
@@ -71,9 +73,22 @@ public sealed class MauiSecureCredentialStore : ISecureCredentialStore
 	}
 }
 
+public sealed class LauncherAudioPlaybackService : IAudioPlaybackService
+{
+	public async Task PlayAsync(string audioUrl, CancellationToken cancellationToken = default)
+	{
+		if (!Uri.TryCreate(audioUrl, UriKind.Absolute, out var uri))
+		{
+			throw new InvalidOperationException("发音地址无效");
+		}
+
+		await Launcher.Default.OpenAsync(uri);
+	}
+}
+
 public sealed class DefaultResultPopupService : IResultPopupService
 {
-	public void Show(Models.TranslationBatchResult result, int autoHideSeconds)
+	public void Show(Models.TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
 	{
 	}
 }

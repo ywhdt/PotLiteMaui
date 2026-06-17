@@ -37,7 +37,12 @@ public interface ISecureCredentialStore
 	Task DeleteAsync(string key);
 }
 
+public interface IAudioPlaybackService
+{
+	Task PlayAsync(string audioUrl, CancellationToken cancellationToken = default);
+}
+
 public interface IResultPopupService
 {
-	void Show(TranslationBatchResult result, int autoHideSeconds);
+	void Show(TranslationBatchResult result, int autoHideSeconds, double resultFontSize);
 }

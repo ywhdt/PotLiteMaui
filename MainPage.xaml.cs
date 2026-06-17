@@ -1,6 +1,7 @@
 using PotLiteMaui.Models;
 using PotLiteMaui.Services;
 using PotLiteMaui.Services.Platform;
+using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace PotLiteMaui;
@@ -16,6 +17,7 @@ public partial class MainPage : ContentPage
 	private readonly ISecureCredentialStore _credentialStore;
 	private readonly ITranslationHistoryStore _historyStore;
 	private readonly IResultPopupService _resultPopupService;
+	private readonly IAudioPlaybackService _audioPlaybackService;
 	private readonly PickerOption[] _sourceLanguages =
 	[
 		new("auto", "自动检测"),
@@ -58,7 +60,8 @@ public partial class MainPage : ContentPage
 		IStartupService startupService,
 		ISecureCredentialStore credentialStore,
 		ITranslationHistoryStore historyStore,
-		IResultPopupService resultPopupService)
+		IResultPopupService resultPopupService,
+		IAudioPlaybackService audioPlaybackService)
 	{
 		InitializeComponent();
 		_settingsStore = settingsStore;
@@ -70,6 +73,7 @@ public partial class MainPage : ContentPage
 		_credentialStore = credentialStore;
 		_historyStore = historyStore;
 		_resultPopupService = resultPopupService;
+		_audioPlaybackService = audioPlaybackService;
 		_hotkeyService.HotkeyPressed += OnHotkeyPressed;
 		_providerOptions = _translationService.Providers
 			.Select(provider => new PickerOption(provider.Id, provider.DisplayName))
@@ -110,17 +114,16 @@ public partial class MainPage : ContentPage
 			StartWithSystemSwitch.IsEnabled = _startupService.IsSupported;
 			HistoryEnabledSwitch.IsToggled = _settings.HistoryEnabled;
 			HistoryLimitEntry.Text = _settings.HistoryLimit.ToString();
+			ResultFontSizeEntry.Text = _settings.ResultFontSize.ToString();
 			SelectPickerValue(SourceLanguagePicker, _sourceLanguages, _settings.SourceLanguage);
 			SelectPickerValue(TargetLanguagePicker, _targetLanguages, _settings.TargetLanguage);
 			SelectPickerValue(ProviderPicker, _providerOptions, _settings.DefaultProvider);
 			MultiProviderCheckBox.IsChecked = _settings.MultiProviderEnabled;
 			ApplyProviderSelectionsFromSettings();
-			AzureEndpointEntry.Text = _settings.AzureEndpoint;
-			AzureRegionEntry.Text = _settings.AzureRegion;
 			OpenAIModelEntry.Text = _settings.OpenAIModel;
 			OpenAICustomPromptEditor.Text = _settings.OpenAICustomPrompt;
 			OpenAIKeyEntry.Text = await _credentialStore.GetAsync(SecureCredentialKeys.OpenAIApiKey) ?? string.Empty;
-			AzureKeyEntry.Text = await _credentialStore.GetAsync(SecureCredentialKeys.AzureTranslatorKey) ?? string.Empty;
+			ApplyResultFontSize();
 			UpdateProviderSections();
 		}
 		finally
@@ -137,6 +140,7 @@ public partial class MainPage : ContentPage
 		}
 
 		CaptureSettingsFromUi();
+		ApplyResultFontSize();
 		UpdateProviderSections();
 		await _settingsStore.SaveAsync(_settings);
 		await ApplyPlatformStateAsync();
@@ -150,7 +154,6 @@ public partial class MainPage : ContentPage
 		}
 
 		await _credentialStore.SetAsync(SecureCredentialKeys.OpenAIApiKey, OpenAIKeyEntry.Text?.Trim() ?? string.Empty);
-		await _credentialStore.SetAsync(SecureCredentialKeys.AzureTranslatorKey, AzureKeyEntry.Text?.Trim() ?? string.Empty);
 	}
 
 	private async void OnCaptureSelectionClicked(object? sender, EventArgs e)
@@ -331,13 +334,15 @@ public partial class MainPage : ContentPage
 		_settings.StartWithSystem = StartWithSystemSwitch.IsToggled;
 		_settings.HistoryEnabled = HistoryEnabledSwitch.IsToggled;
 		_settings.HistoryLimit = int.TryParse(HistoryLimitEntry.Text, out var historyLimit) ? Math.Max(0, historyLimit) : 0;
+		_settings.ResultFontSize = ClampResultFontSize(
+			int.TryParse(ResultFontSizeEntry.Text, out var resultFontSize)
+				? resultFontSize
+				: _settings.ResultFontSize);
 		_settings.SourceLanguage = (SourceLanguagePicker.SelectedItem as PickerOption)?.Code ?? "auto";
 		_settings.TargetLanguage = (TargetLanguagePicker.SelectedItem as PickerOption)?.Code ?? "zh";
 		_settings.DefaultProvider = (ProviderPicker.SelectedItem as PickerOption)?.Code ?? TranslationProviderIds.GoogleWeb;
 		_settings.MultiProviderEnabled = MultiProviderCheckBox.IsChecked;
 		_settings.EnabledProviderIds = GetOrderedCheckedProviderIds().ToList();
-		_settings.AzureEndpoint = AzureEndpointEntry.Text?.Trim() ?? string.Empty;
-		_settings.AzureRegion = AzureRegionEntry.Text?.Trim() ?? string.Empty;
 		_settings.OpenAIModel = OpenAIModelEntry.Text?.Trim() ?? string.Empty;
 		_settings.OpenAICustomPrompt = OpenAICustomPromptEditor.Text?.Trim() ?? string.Empty;
 	}
@@ -352,7 +357,7 @@ public partial class MainPage : ContentPage
 		SyncProviderOrderWithChecks();
 		RenderProviderOrderPicker();
 		GoogleSection.IsVisible = providers.Contains(TranslationProviderIds.GoogleWeb);
-		AzureSection.IsVisible = providers.Contains(TranslationProviderIds.AzureDictionary);
+		BingSection.IsVisible = providers.Contains(TranslationProviderIds.BingDictionary);
 		OpenAISection.IsVisible = providers.Contains(TranslationProviderIds.OpenAI);
 	}
 
@@ -380,9 +385,9 @@ public partial class MainPage : ContentPage
 			yield return TranslationProviderIds.GoogleWeb;
 		}
 
-		if (AzureProviderCheckBox.IsChecked)
+		if (BingProviderCheckBox.IsChecked)
 		{
-			yield return TranslationProviderIds.AzureDictionary;
+			yield return TranslationProviderIds.BingDictionary;
 		}
 
 		if (OpenAIProviderCheckBox.IsChecked)
@@ -406,7 +411,7 @@ public partial class MainPage : ContentPage
 				: [_settings.DefaultProvider])
 			.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		GoogleProviderCheckBox.IsChecked = selected.Contains(TranslationProviderIds.GoogleWeb);
-		AzureProviderCheckBox.IsChecked = selected.Contains(TranslationProviderIds.AzureDictionary);
+		BingProviderCheckBox.IsChecked = selected.Contains(TranslationProviderIds.BingDictionary);
 		OpenAIProviderCheckBox.IsChecked = selected.Contains(TranslationProviderIds.OpenAI);
 	}
 
@@ -489,7 +494,7 @@ public partial class MainPage : ContentPage
 		return providerId switch
 		{
 			TranslationProviderIds.GoogleWeb => GoogleProviderCheckBox.IsChecked,
-			TranslationProviderIds.AzureDictionary => AzureProviderCheckBox.IsChecked,
+			TranslationProviderIds.BingDictionary => BingProviderCheckBox.IsChecked,
 			TranslationProviderIds.OpenAI => OpenAIProviderCheckBox.IsChecked,
 			_ => false
 		};
@@ -501,12 +506,14 @@ public partial class MainPage : ContentPage
 		_currentDisplayText = result.DisplayText;
 		ResultStack.Children.Clear();
 
-		foreach (var item in result.DisplayItems)
+		var cards = result.Results
+			.Select(item => (item.Order, View: CreateResultCard(item)))
+			.Concat(result.Failures.Select(item => (
+				item.Order,
+				View: CreateResultCard($"{item.ProviderName} 失败", item.ErrorMessage, isError: true))));
+		foreach (var item in cards.OrderBy(item => item.Order))
 		{
-			ResultStack.Children.Add(CreateResultCard(
-				item.IsSuccess ? item.ProviderName : $"{item.ProviderName} 失败",
-				item.Text,
-				isError: !item.IsSuccess));
+			ResultStack.Children.Add(item.View);
 		}
 
 		if (ResultStack.Children.Count == 0)
@@ -610,32 +617,202 @@ public partial class MainPage : ContentPage
 			: list;
 	}
 
-	private static View CreateResultCard(string title, string text, bool isError)
+	private View CreateResultCard(TranslationResult result)
 	{
+		return CreateResultCard(
+			result.ProviderName,
+			result.DisplayText,
+			isError: false,
+			result.Dictionary);
+	}
+
+	private View CreateResultCard(string title, string text, bool isError)
+	{
+		return CreateResultCard(title, text, isError, dictionary: null);
+	}
+
+	private View CreateResultCard(string title, string text, bool isError, DictionaryResult? dictionary)
+	{
+		var resultFontSize = GetResultFontSize();
 		var titleLabel = new Label
 		{
 			Text = title,
-			FontSize = 13,
+			FontSize = Math.Max(12, resultFontSize - 2),
 			FontAttributes = FontAttributes.Bold,
 			TextColor = isError ? Colors.Firebrick : Colors.DarkSlateGray
 		};
-		var bodyLabel = new Label
+		var layout = new VerticalStackLayout
 		{
-			Text = text,
-			FontSize = 15,
-			LineBreakMode = LineBreakMode.WordWrap
+			Spacing = 6,
+			Children = { titleLabel }
 		};
+
+		if (dictionary is not null)
+		{
+			AddDictionaryContent(layout, dictionary);
+		}
+		else
+		{
+			layout.Children.Add(new Label
+			{
+				Text = text,
+				FontSize = resultFontSize,
+				LineBreakMode = LineBreakMode.WordWrap
+			});
+		}
+
 		return new Border
 		{
 			Stroke = isError ? Colors.IndianRed : Colors.LightGray,
 			StrokeShape = new RoundRectangle { CornerRadius = 8 },
 			Padding = 12,
-			Content = new VerticalStackLayout
-			{
-				Spacing = 6,
-				Children = { titleLabel, bodyLabel }
-			}
+			Content = layout
 		};
+	}
+
+	private void AddDictionaryContent(VerticalStackLayout layout, DictionaryResult dictionary)
+	{
+		var resultFontSize = GetResultFontSize();
+		if (!string.IsNullOrWhiteSpace(dictionary.Term))
+		{
+			layout.Children.Add(new Label
+			{
+				Text = dictionary.Term,
+				FontSize = resultFontSize + 3,
+				FontAttributes = FontAttributes.Bold,
+				LineBreakMode = LineBreakMode.WordWrap
+			});
+		}
+
+		AddPronunciationRow(layout, dictionary);
+
+		var body = CreateDictionaryBodyText(dictionary);
+		if (!string.IsNullOrWhiteSpace(body))
+		{
+			layout.Children.Add(new Label
+			{
+				Text = body,
+				FontSize = resultFontSize,
+				LineBreakMode = LineBreakMode.WordWrap
+			});
+		}
+
+		AddDictionarySourceLink(layout, dictionary);
+	}
+
+	private void AddPronunciationRow(VerticalStackLayout layout, DictionaryResult dictionary)
+	{
+		var resultFontSize = GetResultFontSize();
+		var row = new HorizontalStackLayout
+		{
+			Spacing = 8
+		};
+
+		foreach (var pronunciation in dictionary.Pronunciations.Where(item => !string.IsNullOrWhiteSpace(item.AudioUrl)))
+		{
+			var button = new Button
+			{
+				Text = "播放",
+				FontSize = Math.Max(12, resultFontSize - 3),
+				Padding = new Thickness(10, 4)
+			};
+			button.Clicked += async (_, _) => await PlayPronunciationAsync(pronunciation);
+			row.Children.Add(button);
+			if (!string.IsNullOrWhiteSpace(pronunciation.Phonetic))
+			{
+				row.Children.Add(new Label
+				{
+					Text = pronunciation.Phonetic,
+					FontSize = Math.Max(12, resultFontSize - 1),
+					VerticalOptions = LayoutOptions.Center,
+					TextColor = Colors.SlateGray
+				});
+			}
+		}
+
+		if (row.Children.Count > 0)
+		{
+			layout.Children.Add(row);
+		}
+	}
+
+	private async Task PlayPronunciationAsync(DictionaryPronunciation pronunciation)
+	{
+		try
+		{
+			await _audioPlaybackService.PlayAsync(pronunciation.AudioUrl);
+			SetStatus("正在播放发音");
+		}
+		catch (Exception ex)
+		{
+			SetStatus(ex.Message);
+		}
+	}
+
+	private void AddDictionarySourceLink(VerticalStackLayout layout, DictionaryResult dictionary)
+	{
+		if (string.IsNullOrWhiteSpace(dictionary.SourceUrl))
+		{
+			return;
+		}
+
+		var link = new Label
+		{
+			Text = "必应词典网页",
+			FontSize = Math.Max(12, GetResultFontSize() - 3),
+			TextColor = Colors.RoyalBlue,
+			TextDecorations = TextDecorations.Underline
+		};
+		link.GestureRecognizers.Add(new TapGestureRecognizer
+		{
+			Command = new Command(async () => await OpenDictionaryPageAsync(dictionary.SourceUrl))
+		});
+		layout.Children.Add(link);
+	}
+
+	private static string CreateDictionaryBodyText(DictionaryResult dictionary)
+	{
+		var lines = new List<string>();
+		foreach (var translation in dictionary.Translations.Take(8))
+		{
+			var pos = string.IsNullOrWhiteSpace(translation.PartOfSpeech) ? string.Empty : $" [{translation.PartOfSpeech}]";
+			lines.Add($"{translation.DisplayTarget}{pos}");
+			if (translation.BackTranslations.Count > 0)
+			{
+				lines.Add($"  {string.Join(", ", translation.BackTranslations.Take(5))}");
+			}
+		}
+
+		if (dictionary.Examples.Count > 0)
+		{
+			lines.Add(string.Empty);
+			lines.Add("例句");
+			foreach (var example in dictionary.Examples.Take(3))
+			{
+				lines.Add($"- {example.Source}");
+				lines.Add($"  {example.Target}");
+			}
+		}
+
+		return string.Join(Environment.NewLine, lines);
+	}
+
+	private async Task OpenDictionaryPageAsync(string url)
+	{
+		try
+		{
+			if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+			{
+				SetStatus("词典网页地址无效");
+				return;
+			}
+
+			await Launcher.Default.OpenAsync(uri);
+		}
+		catch (Exception ex)
+		{
+			SetStatus(ex.Message);
+		}
 	}
 
 	private static Label CreateMutedLabel(string text)
@@ -649,7 +826,7 @@ public partial class MainPage : ContentPage
 
 	private void ShowResultWindow(TranslationBatchResult result)
 	{
-		_resultPopupService.Show(result, _settings.PopupAutoHideSeconds);
+		_resultPopupService.Show(result, _settings.PopupAutoHideSeconds, GetResultFontSize());
 	}
 
 	private void SetBusy(bool isBusy, string? message = null)
@@ -667,6 +844,31 @@ public partial class MainPage : ContentPage
 	private void SetStatus(string message)
 	{
 		StatusLabel.Text = message;
+	}
+
+	private void ApplyResultFontSize()
+	{
+		var resultFontSize = GetResultFontSize();
+		ResultPlaceholderLabel.FontSize = resultFontSize;
+		HistoryDetailResultLabel.FontSize = resultFontSize;
+		if (_currentResult is not null)
+		{
+			ShowResult(_currentResult);
+		}
+		else if (_selectedHistoryEntry is not null)
+		{
+			ShowHistoryResult(_selectedHistoryEntry);
+		}
+	}
+
+	private double GetResultFontSize()
+	{
+		return ClampResultFontSize(_settings.ResultFontSize);
+	}
+
+	private static int ClampResultFontSize(int value)
+	{
+		return Math.Clamp(value, 12, 30);
 	}
 
 	private static void SelectPickerValue(Picker picker, PickerOption[] options, string code)
