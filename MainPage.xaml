@@ -127,7 +127,7 @@
                             </HorizontalStackLayout>
                             <HorizontalStackLayout Grid.Column="1"
                                                    Spacing="4">
-                                <CheckBox x:Name="AzureProviderCheckBox"
+                                <CheckBox x:Name="BingProviderCheckBox"
                                           CheckedChanged="OnSettingsChanged" />
                                 <Label Text="Bing 词典"
                                        VerticalOptions="Center" />
@@ -165,30 +165,13 @@
                        TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
             </Border>
 
-            <Border x:Name="AzureSection"
+            <Border x:Name="BingSection"
                     Stroke="{AppThemeBinding Light=#CBD5E1, Dark=#334155}"
                     BackgroundColor="{AppThemeBinding Light=#FFFFFF, Dark=#0F172A}"
                     StrokeShape="RoundRectangle 8"
                     Padding="18">
-                <Grid ColumnDefinitions="2*,*,*" ColumnSpacing="12">
-                    <VerticalStackLayout Grid.Column="0" Spacing="6">
-                        <Label Text="Azure Endpoint" />
-                        <Entry x:Name="AzureEndpointEntry"
-                               TextChanged="OnSettingsChanged"
-                               Placeholder="https://api.cognitive.microsofttranslator.com" />
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Grid.Column="1" Spacing="6">
-                        <Label Text="Region" />
-                        <Entry x:Name="AzureRegionEntry"
-                               TextChanged="OnSettingsChanged" />
-                    </VerticalStackLayout>
-                    <VerticalStackLayout Grid.Column="2" Spacing="6">
-                        <Label Text="Key" />
-                        <Entry x:Name="AzureKeyEntry"
-                               IsPassword="True"
-                               TextChanged="OnCredentialChanged" />
-                    </VerticalStackLayout>
-                </Grid>
+                <Label Text="Bing 词典使用必应网页结果，不需要 API Key；支持美音/英音发音按钮和打开原网页查看完整词典内容。"
+                       TextColor="{AppThemeBinding Light=#475569, Dark=#CBD5E1}" />
             </Border>
 
             <Border x:Name="OpenAISection"
@@ -251,12 +234,19 @@
                         StrokeShape="RoundRectangle 8"
                         Padding="18">
                     <VerticalStackLayout Spacing="10">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Grid ColumnDefinitions="*,Auto,72,Auto" ColumnSpacing="12">
                             <Label Text="结果"
                                    FontSize="18"
                                    FontAttributes="Bold"
                                    VerticalOptions="Center" />
-                            <Button Grid.Column="1"
+                            <Label Grid.Column="1"
+                                   Text="字号"
+                                   VerticalOptions="Center" />
+                            <Entry Grid.Column="2"
+                                   x:Name="ResultFontSizeEntry"
+                                   Keyboard="Numeric"
+                                   TextChanged="OnSettingsChanged" />
+                            <Button Grid.Column="3"
                                     Text="复制"
                                     Clicked="OnCopyResultClicked" />
                         </Grid>

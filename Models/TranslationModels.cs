@@ -130,10 +130,30 @@ public sealed class DictionaryResult
 	public string Term { get; init; } = string.Empty;
 	public List<DictionaryTranslation> Translations { get; init; } = [];
 	public List<DictionaryExample> Examples { get; init; } = [];
+	public List<DictionaryPronunciation> Pronunciations { get; init; } = [];
+	public string SourceUrl { get; init; } = string.Empty;
 
 	public string ToDisplayText()
 	{
 		var lines = new List<string>();
+		if (!string.IsNullOrWhiteSpace(Term))
+		{
+			lines.Add(Term);
+		}
+
+		if (Pronunciations.Count > 0)
+		{
+			var phonetics = Pronunciations
+				.Select(item => item.Phonetic)
+				.Where(item => !string.IsNullOrWhiteSpace(item))
+				.ToArray();
+			if (phonetics.Length > 0)
+			{
+				lines.Add(string.Join("  ", phonetics));
+				lines.Add(string.Empty);
+			}
+		}
+
 		foreach (var translation in Translations.Take(8))
 		{
 			var pos = string.IsNullOrWhiteSpace(translation.PartOfSpeech) ? string.Empty : $" [{translation.PartOfSpeech}]";
@@ -157,6 +177,13 @@ public sealed class DictionaryResult
 
 		return lines.Count == 0 ? "没有词典结果" : string.Join(Environment.NewLine, lines);
 	}
+}
+
+public sealed class DictionaryPronunciation
+{
+	public string Label { get; init; } = string.Empty;
+	public string Phonetic { get; init; } = string.Empty;
+	public string AudioUrl { get; init; } = string.Empty;
 }
 
 public sealed class DictionaryTranslation

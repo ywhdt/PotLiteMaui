@@ -16,6 +16,7 @@ using WinUIGrid = Microsoft.UI.Xaml.Controls.Grid;
 using WinUIGridLength = Microsoft.UI.Xaml.GridLength;
 using WinUIGridUnitType = Microsoft.UI.Xaml.GridUnitType;
 using WinUIHorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment;
+using WinUIHyperlinkButton = Microsoft.UI.Xaml.Controls.HyperlinkButton;
 using WinUIOrientation = Microsoft.UI.Xaml.Controls.Orientation;
 using WinUIRowDefinition = Microsoft.UI.Xaml.Controls.RowDefinition;
 using WinUIScrollBarVisibility = Microsoft.UI.Xaml.Controls.ScrollBarVisibility;
@@ -49,19 +50,28 @@ public sealed class WindowsResultPopupService : IResultPopupService
 
 	private readonly List<PopupSession> _sessions = [];
 	private readonly string _statePath = Path.Combine(FileSystem.AppDataDirectory, "popup-window.json");
+	private readonly IAudioPlaybackService _audioPlaybackService;
 
-	public void Show(TranslationBatchResult result, int autoHideSeconds)
+	public WindowsResultPopupService(IAudioPlaybackService audioPlaybackService)
 	{
-		MainThread.BeginInvokeOnMainThread(() => ShowCore(result, Math.Clamp(autoHideSeconds, 0, 60)));
+		_audioPlaybackService = audioPlaybackService;
 	}
 
-	private void ShowCore(TranslationBatchResult result, int autoHideSeconds)
+	public void Show(TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
+	{
+		MainThread.BeginInvokeOnMainThread(() => ShowCore(
+			result,
+			Math.Clamp(autoHideSeconds, 0, 60),
+			ClampResultFontSize(resultFontSize)));
+	}
+
+	private void ShowCore(TranslationBatchResult result, int autoHideSeconds, double resultFontSize)
 	{
 		CloseUnpinnedSessions();
 
 		var state = new PopupState();
 		var session = new PopupSession(new WinUIWindow { Title = "翻译结果" }, state);
-		session.Window.Content = CreateContent(result, state, () => session.Window.Close());
+		session.Window.Content = CreateContent(result, state, () => session.Window.Close(), _audioPlaybackService, resultFontSize);
 		session.Window.Closed += (_, _) =>
 		{
 			SaveWindowSize(session.Window);
@@ -89,7 +99,12 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		}
 	}
 
-	private static WinUIGrid CreateContent(TranslationBatchResult result, PopupState state, Action close)
+	private static WinUIGrid CreateContent(
+		TranslationBatchResult result,
+		PopupState state,
+		Action close,
+		IAudioPlaybackService audioPlaybackService,
+		double resultFontSize)
 	{
 		var root = new WinUIGrid
 		{
@@ -116,12 +131,14 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		root.Children.Add(header);
 
 		var resultStack = new WinUIStackPanel { Spacing = 10 };
-		foreach (var item in result.DisplayItems)
+		var sections = result.Results
+			.Select(item => (item.Order, Section: CreateResultSection(item, audioPlaybackService, resultFontSize)))
+			.Concat(result.Failures.Select(item => (
+				item.Order,
+				Section: CreateResultSection($"{item.ProviderName} 失败", item.ErrorMessage, isError: true, resultFontSize))));
+		foreach (var item in sections.OrderBy(item => item.Order))
 		{
-			resultStack.Children.Add(CreateResultSection(
-				item.IsSuccess ? item.ProviderName : $"{item.ProviderName} 失败",
-				item.Text,
-				isError: !item.IsSuccess));
+			resultStack.Children.Add(item.Section);
 		}
 
 		if (resultStack.Children.Count == 0)
@@ -193,22 +210,59 @@ public sealed class WindowsResultPopupService : IResultPopupService
 		};
 	}
 
-	private static WinUIBorder CreateResultSection(string title, string text, bool isError)
+	private static double ClampResultFontSize(double value)
+	{
+		return Math.Clamp(value, 12, 30);
+	}
+
+	private static WinUIBorder CreateResultSection(
+		TranslationResult result,
+		IAudioPlaybackService audioPlaybackService,
+		double resultFontSize)
+	{
+		return CreateResultSection(
+			result.ProviderName,
+			result.DisplayText,
+			isError: false,
+			resultFontSize,
+			result.Dictionary,
+			audioPlaybackService);
+	}
+
+	private static WinUIBorder CreateResultSection(string title, string text, bool isError, double resultFontSize)
+	{
+		return CreateResultSection(title, text, isError, resultFontSize, dictionary: null, audioPlaybackService: null);
+	}
+
+	private static WinUIBorder CreateResultSection(
+		string title,
+		string text,
+		bool isError,
+		double resultFontSize,
+		DictionaryResult? dictionary,
+		IAudioPlaybackService? audioPlaybackService)
 	{
 		var panel = new WinUIStackPanel { Spacing = 7 };
 		panel.Children.Add(new WinUITextBlock
 		{
 			Text = title,
-			FontSize = 13,
+			FontSize = Math.Max(12, resultFontSize - 2),
 			FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
 			Foreground = new WinUISolidColorBrush(isError ? WinUIColors.Firebrick : WinUIColors.DarkSlateGray)
 		});
-		panel.Children.Add(new WinUITextBlock
+		if (dictionary is not null)
 		{
-			Text = text,
-			FontSize = 15,
-			TextWrapping = TextWrapping.Wrap
-		});
+			AddDictionaryContent(panel, dictionary, audioPlaybackService, resultFontSize);
+		}
+		else
+		{
+			panel.Children.Add(new WinUITextBlock
+			{
+				Text = text,
+				FontSize = resultFontSize,
+				TextWrapping = TextWrapping.Wrap
+			});
+		}
 
 		return new WinUIBorder
 		{
@@ -219,6 +273,136 @@ public sealed class WindowsResultPopupService : IResultPopupService
 			Padding = new WinUIThickness(12),
 			Child = panel
 		};
+	}
+
+	private static void AddDictionaryContent(
+		WinUIStackPanel panel,
+		DictionaryResult dictionary,
+		IAudioPlaybackService? audioPlaybackService,
+		double resultFontSize)
+	{
+		if (!string.IsNullOrWhiteSpace(dictionary.Term))
+		{
+			panel.Children.Add(new WinUITextBlock
+			{
+				Text = dictionary.Term,
+				FontSize = resultFontSize + 3,
+				FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+				TextWrapping = TextWrapping.Wrap
+			});
+		}
+
+		AddPronunciationRows(panel, dictionary, audioPlaybackService, resultFontSize);
+
+		var body = CreateDictionaryBodyText(dictionary);
+		if (!string.IsNullOrWhiteSpace(body))
+		{
+			panel.Children.Add(new WinUITextBlock
+			{
+				Text = body,
+				FontSize = resultFontSize,
+				TextWrapping = TextWrapping.Wrap
+			});
+		}
+
+		AddDictionarySourceLink(panel, dictionary, resultFontSize);
+	}
+
+	private static void AddPronunciationRows(
+		WinUIStackPanel panel,
+		DictionaryResult dictionary,
+		IAudioPlaybackService? audioPlaybackService,
+		double resultFontSize)
+	{
+		var hasAudio = audioPlaybackService is not null &&
+			dictionary.Pronunciations.Any(item => !string.IsNullOrWhiteSpace(item.AudioUrl));
+		if (!hasAudio)
+		{
+			return;
+		}
+
+		var row = new WinUIStackPanel
+		{
+			Orientation = WinUIOrientation.Horizontal,
+			Spacing = 8
+		};
+
+		if (audioPlaybackService is not null)
+		{
+			foreach (var pronunciation in dictionary.Pronunciations.Where(item => !string.IsNullOrWhiteSpace(item.AudioUrl)))
+			{
+				var button = CreateActionButton("播放");
+				button.FontSize = Math.Max(12, resultFontSize - 3);
+				button.Click += async (_, _) => await audioPlaybackService.PlayAsync(pronunciation.AudioUrl);
+				row.Children.Add(button);
+				if (!string.IsNullOrWhiteSpace(pronunciation.Phonetic))
+				{
+					row.Children.Add(new WinUITextBlock
+					{
+						Text = pronunciation.Phonetic,
+						FontSize = Math.Max(12, resultFontSize - 1),
+						VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Center,
+						Foreground = new WinUISolidColorBrush(WinUIColors.DimGray)
+					});
+				}
+			}
+		}
+
+		if (row.Children.Count > 0)
+		{
+			panel.Children.Add(row);
+		}
+	}
+
+	private static void AddDictionarySourceLink(WinUIStackPanel panel, DictionaryResult dictionary, double resultFontSize)
+	{
+		if (string.IsNullOrWhiteSpace(dictionary.SourceUrl))
+		{
+			return;
+		}
+
+		var link = new WinUIHyperlinkButton
+		{
+			Content = "必应词典网页",
+			FontSize = Math.Max(12, resultFontSize - 3),
+			Padding = new WinUIThickness(0),
+			HorizontalAlignment = WinUIHorizontalAlignment.Left
+		};
+		link.Click += async (_, _) =>
+		{
+			if (Uri.TryCreate(dictionary.SourceUrl, UriKind.Absolute, out var sourceUri))
+			{
+				await Launcher.Default.OpenAsync(sourceUri);
+			}
+		};
+		panel.Children.Add(link);
+	}
+
+	private static string CreateDictionaryBodyText(DictionaryResult dictionary)
+	{
+		var lines = new List<string>();
+		foreach (var translation in dictionary.Translations.Take(8))
+		{
+			var pos = string.IsNullOrWhiteSpace(translation.PartOfSpeech) ? string.Empty : $" [{translation.PartOfSpeech}]";
+			lines.Add($"{translation.DisplayTarget}{pos}");
+			if (translation.BackTranslations.Count > 0)
+			{
+				lines.Add($"  {string.Join(", ", translation.BackTranslations.Take(5))}");
+			}
+		}
+
+		if (dictionary.Examples.Count > 0)
+		{
+			lines.Add(string.Empty);
+			lines.Add("例句");
+			foreach (var example in dictionary.Examples.Take(3))
+			{
+				lines.Add($"- {example.Source}");
+				lines.Add($"  {example.Target}");
+			}
+		}
+
+		return string.Join(Environment.NewLine, lines);
 	}
 
 	private void CloseUnpinnedSessions()

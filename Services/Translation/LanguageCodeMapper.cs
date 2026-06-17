@@ -11,13 +11,4 @@ public static class LanguageCodeMapper
 		};
 	}
 
-	public static string ToAzure(string code)
-	{
-		return code switch
-		{
-			"zh" => "zh-Hans",
-			"auto" => "auto",
-			_ => string.IsNullOrWhiteSpace(code) ? "en" : code
-		};
-	}
 }
