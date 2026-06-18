@@ -23,6 +23,10 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 	private const uint NimModify = 0x00000001;
 	private const uint NimDelete = 0x00000002;
 	private const uint IdiApplication = 32512;
+	private const uint ImageIcon = 1;
+	private const uint LrLoadFromFile = 0x00000010;
+	private const int SmCxSmIcon = 49;
+	private const int SmCySmIcon = 50;
 	private const uint MfString = 0x00000000;
 	private const uint TpmReturnCmd = 0x0100;
 	private const uint TpmNonotify = 0x0080;
@@ -33,6 +37,7 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 	private Func<AppSettings>? _settingsProvider;
 	private nint _hwnd;
 	private nint _icon;
+	private bool _ownsIcon;
 	private bool _subclassInstalled;
 	private bool _trayAdded;
 	private bool _allowClose;
@@ -64,7 +69,7 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 			_subclassInstalled = SetWindowSubclass(_hwnd, _subclassProc, UIntPtr.Zero, UIntPtr.Zero);
 		}
 
-		_icon = LoadIcon(0, IdiApplication);
+		_icon = LoadTrayIcon();
 		AddOrUpdateTrayIcon("划词翻译");
 	}
 
@@ -90,6 +95,36 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 			RemoveWindowSubclass(_hwnd, _subclassProc, UIntPtr.Zero);
 			_subclassInstalled = false;
 		}
+
+		if (_ownsIcon && _icon != 0)
+		{
+			DestroyIcon(_icon);
+			_icon = 0;
+			_ownsIcon = false;
+		}
+	}
+
+	private nint LoadTrayIcon()
+	{
+		var iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
+		if (File.Exists(iconPath))
+		{
+			var icon = LoadImage(
+				0,
+				iconPath,
+				ImageIcon,
+				GetSystemMetrics(SmCxSmIcon),
+				GetSystemMetrics(SmCySmIcon),
+				LrLoadFromFile);
+			if (icon != 0)
+			{
+				_ownsIcon = true;
+				return icon;
+			}
+		}
+
+		_ownsIcon = false;
+		return LoadIcon(0, IdiApplication);
 	}
 
 	private void AddOrUpdateTrayIcon(string tip)
@@ -210,6 +245,15 @@ public sealed class WindowsTrayService : ITrayService, IDisposable
 
 	[DllImport("user32.dll")]
 	private static extern nint LoadIcon(nint instance, uint iconName);
+
+	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+	private static extern nint LoadImage(nint instance, string name, uint type, int width, int height, uint load);
+
+	[DllImport("user32.dll")]
+	private static extern int GetSystemMetrics(int index);
+
+	[DllImport("user32.dll")]
+	private static extern bool DestroyIcon(nint icon);
 
 	[DllImport("user32.dll")]
 	private static extern bool ShowWindow(nint hWnd, int nCmdShow);
